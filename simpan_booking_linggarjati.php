@@ -1,7 +1,13 @@
 <?php include_once "header.php"; ?>
 
 <?php
-// ================= CEK LOGIN (WAJIB) =================
+// ================= SET TIMEZONE =================
+date_default_timezone_set('Asia/Jakarta');
+
+// ================= INCLUDE HEADER =================
+include_once "header.php";
+
+// ================= CEK LOGIN =================
 if (!isset($_SESSION['akun_id'])) {
     header("Location: index.php");
     exit;
@@ -9,6 +15,7 @@ if (!isset($_SESSION['akun_id'])) {
 
 $pesan = '';
 
+// ================= PROSES BOOKING =================
 if (isset($_POST['booking'])) {
 
     $akun_id = $_SESSION['akun_id'];
@@ -16,15 +23,21 @@ if (isset($_POST['booking'])) {
 
     try {
 
-        // ================= AMBIL & VALIDASI INPUT =================
+        // ================= AMBIL INPUT =================
+        $akun_id = $_SESSION['akun_id'];
         $tanggal = $_POST['tanggal'];
-        $jalur = 'linggarjati';
+        $jalur   = 'linggarjati';
         $jumlah  = (int) $_POST['jumlah_pendaki'];
 
-        if ($tanggal < date('Y-m-d')) {
+        // ================= VALIDASI TANGGAL (AMAN) =================
+        $tgl_booking = strtotime($tanggal);
+        $hari_ini    = strtotime(date('Y-m-d'));
+
+        if ($tgl_booking < $hari_ini) {
             throw new Exception("Tanggal pendakian tidak valid");
         }
 
+        // ================= VALIDASI JUMLAH =================
         if ($jumlah < 4) {
             throw new Exception("Minimal 4 pendaki");
         }
@@ -33,16 +46,16 @@ if (isset($_POST['booking'])) {
             throw new Exception("Data anggota tidak lengkap");
         }
 
-        // ================= ESCAPE INPUT STRING =================
-        $no_ktp            = mysqli_real_escape_string($koneksi, $_POST['no_ktp']);
-        $nama_lengkap      = mysqli_real_escape_string($koneksi, $_POST['nama_lengkap']);
-        $tgl_lahir         = $_POST['tgl_lahir'];
-        $jenis_kelamin     = $_POST['jenis_kelamin'];
-        $berat_badan       = (int) $_POST['berat_badan'];
-        $tinggi_badan      = (int) $_POST['tinggi_badan'];
-        $email             = mysqli_real_escape_string($koneksi, $_POST['email']);
-        $no_telp           = mysqli_real_escape_string($koneksi, $_POST['no_telp']);
-        $no_telp_keluarga  = mysqli_real_escape_string($koneksi, $_POST['no_telp_keluarga']);
+        // ================= ESCAPE INPUT =================
+        $no_ktp           = mysqli_real_escape_string($koneksi, $_POST['no_ktp']);
+        $nama_lengkap     = mysqli_real_escape_string($koneksi, $_POST['nama_lengkap']);
+        $tgl_lahir        = $_POST['tgl_lahir'];
+        $jenis_kelamin    = $_POST['jenis_kelamin'];
+        $berat_badan      = (int) $_POST['berat_badan'];
+        $tinggi_badan     = (int) $_POST['tinggi_badan'];
+        $email            = mysqli_real_escape_string($koneksi, $_POST['email']);
+        $no_telp          = mysqli_real_escape_string($koneksi, $_POST['no_telp']);
+        $no_telp_keluarga = mysqli_real_escape_string($koneksi, $_POST['no_telp_keluarga']);
 
         // ================= CEK KUOTA =================
         $q = mysqli_query($koneksi, "SELECT * FROM kuota_pendakian WHERE tanggal='$tanggal'");
@@ -60,10 +73,10 @@ if (isset($_POST['booking'])) {
 
         // ================= GENERATE KODE BOOKING =================
         do {
-            $kode_jalur = strtoupper(substr($jalur, 0, 3));
-            $tgl_kode   = date('Ymd');
-            $random     = strtoupper(substr(md5(uniqid()), 0, 4));
-            $kode_booking = "BK-$kode_jalur-$tgl_kode-$random";
+            $kode_booking = "BK-" .
+                strtoupper(substr($jalur, 0, 3)) . "-" .
+                date('Ymd') . "-" .
+                strtoupper(substr(md5(uniqid()), 0, 4));
 
             $cek = mysqli_query($koneksi,
                 "SELECT id_booking FROM booking_pendaki WHERE kode_booking='$kode_booking'"
@@ -73,18 +86,16 @@ if (isset($_POST['booking'])) {
         // ================= SIMPAN LEADER =================
         mysqli_query($koneksi, "
             INSERT INTO booking_pendaki (
-    akun_id, kode_booking, id_kp, jalur, jumlah_pendaki,
-    no_ktp, nama_lengkap, tgl_lahir, jenis_kelamin,
-    berat_badan, tinggi_badan, email, no_telp,
-    no_telp_keluarga, status_pembayaran, created_at
-) VALUES (
-    '$akun_id', '$kode_booking', '{$data['id_kp']}', '$jalur', '$jumlah',
-    '$no_ktp', '$nama_lengkap', '$tgl_lahir', '$jenis_kelamin',
-    '$berat_badan', '$tinggi_badan', '$email', '$no_telp',
-    '$no_telp_keluarga', 'menunggu_pembayaran', NOW()
-);
-
-
+                akun_id, kode_booking, id_kp, jalur, jumlah_pendaki,
+                no_ktp, nama_lengkap, tgl_lahir, jenis_kelamin,
+                berat_badan, tinggi_badan, email, no_telp,
+                no_telp_keluarga, status_pembayaran, created_at
+            ) VALUES (
+                '$akun_id', '$kode_booking', '{$data['id_kp']}', '$jalur', '$jumlah',
+                '$no_ktp', '$nama_lengkap', '$tgl_lahir', '$jenis_kelamin',
+                '$berat_badan', '$tinggi_badan', '$email', '$no_telp',
+                '$no_telp_keluarga', 'menunggu_pembayaran', NOW()
+            )
         ");
 
         $id_booking = mysqli_insert_id($koneksi);
@@ -105,7 +116,9 @@ if (isset($_POST['booking'])) {
             ");
         }
 
+        // ================= COMMIT =================
         mysqli_commit($koneksi);
+
         header("Location: pembayaran.php?kode=$kode_booking");
         exit;
 
@@ -116,98 +129,60 @@ if (isset($_POST['booking'])) {
 }
 ?>
 
-<!-- ================= FORM BOOKING ================= -->
+<!-- ================= FORM ================= -->
 <div class="container mt-5 mb-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
+<div class="row justify-content-center">
+<div class="col-md-8 col-lg-6">
 
-            <div class="card shadow-lg border-0 rounded-4">
-                <div class="card-header bg-success text-white text-center">
-                    <h4 class="mb-0">Booking Pendakian Via Linggarjati</h4>
-                </div>
+<div class="card shadow-lg border-0 rounded-4">
+<div class="card-header bg-success text-white text-center">
+    <h4 class="mb-0">Booking Pendakian Via Linggarjati</h4>
+</div>
 
-                <?= $pesan ?>
+<?= $pesan ?>
 
-                <div class="card-body p-4">
-                    <form method="POST">
+<div class="card-body p-4">
+<form method="POST">
 
-                        <div class="mb-3">
-                            <label class="form-label">Tanggal Pendakian</label>
-                            <input type="date" name="tanggal" class="form-control" required>
-                        </div>
+<div class="mb-3">
+    <label>Tanggal Pendakian</label>
+    <input type="date" name="tanggal"
+           min="<?= date('Y-m-d') ?>"
+           class="form-control" required>
+</div>
 
-                        <input type="hidden" name="jalur" value="linggarjati">
+<div class="mb-3">
+    <label>Jumlah Pendaki</label>
+    <input type="number" id="jumlah_pendaki" name="jumlah_pendaki"
+           min="4" class="form-control" required>
+</div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Jumlah Pendaki</label>
-                            <input type="number" id="jumlah_pendaki" name="jumlah_pendaki" class="form-control" min="4" required>
-                        </div>
+<div id="anggota-container"></div>
+<hr>
 
-                        <div id="anggota-container"></div>
+<input type="text" name="no_ktp" class="form-control mb-2" placeholder="No KTP" required>
+<input type="text" name="nama_lengkap" class="form-control mb-2" placeholder="Nama Leader" required>
+<input type="date" name="tgl_lahir" class="form-control mb-2" required>
 
-                        <hr>
+<select name="jenis_kelamin" class="form-select mb-2" required>
+    <option value="L">Laki-laki</option>
+    <option value="P">Perempuan</option>
+</select>
 
-                        <div class="mb-3">
-                            <label class="form-label">No KTP</label>
-                            <input type="text" name="no_ktp" class="form-control" required>
-                        </div>
+<input type="number" name="berat_badan" class="form-control mb-2" placeholder="Berat Badan" required>
+<input type="number" name="tinggi_badan" class="form-control mb-2" placeholder="Tinggi Badan" required>
+<input type="email" name="email" class="form-control mb-2" placeholder="Email" required>
+<input type="text" name="no_telp" class="form-control mb-2" placeholder="No Telp" required>
+<input type="text" name="no_telp_keluarga" class="form-control mb-3" placeholder="No Telp Keluarga" required>
 
-                        <div class="mb-3">
-                            <label class="form-label">Nama Lengkap (Leader)</label>
-                            <input type="text" name="nama_lengkap" class="form-control" required>
-                        </div>
+<button name="booking" class="btn btn-success w-100">Booking Sekarang</button>
 
-                        <div class="mb-3">
-                            <label class="form-label">Tanggal Lahir</label>
-                            <input type="date" name="tgl_lahir" class="form-control" required>
-                        </div>
+</form>
+</div>
+</div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Jenis Kelamin</label>
-                            <select name="jenis_kelamin" class="form-select" required>
-                                <option value="L">Laki-laki</option>
-                                <option value="P">Perempuan</option>
-                            </select>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Berat Badan (kg)</label>
-                                <input type="number" name="berat_badan" class="form-control" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Tinggi Badan (cm)</label>
-                                <input type="number" name="tinggi_badan" class="form-control" required>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label">No Telepon</label>
-                            <input type="text" name="no_telp" class="form-control" required>
-                        </div>
-
-                        <div class="mb-4">
-                            <label class="form-label">No Telepon Keluarga</label>
-                            <input type="text" name="no_telp_keluarga" class="form-control" required>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" name="booking" class="btn btn-success btn-lg">
-                                Booking Sekarang
-                            </button>
-                        </div>
-
-                    </form>
-                </div>
-            </div>
-
-        </div>
-    </div>
+</div>
+</div>
 </div>
 
 <!-- ================= JS TAMBAH ANGGOTA ================= -->
@@ -215,32 +190,18 @@ if (isset($_POST['booking'])) {
 const jumlahInput = document.getElementById('jumlah_pendaki');
 const container = document.getElementById('anggota-container');
 
-jumlahInput.addEventListener('input', function () {
+jumlahInput.addEventListener('input', () => {
     container.innerHTML = '';
-    let total = parseInt(this.value);
-    if (isNaN(total)) return;
+    let total = parseInt(jumlahInput.value);
+    if (isNaN(total) || total < 4) return;
 
-    if (total < 4) {
-        container.innerHTML = `
-            <div class="alert alert-warning mt-3">
-                Minimal 4 pendaki (1 leader + 3 anggota)
-            </div>`;
-        return;
-    }
-
-    let anggota = total - 1;
-
-    container.innerHTML += `<h5 class="mt-4 mb-3">Data Anggota Pendakian</h5>`;
-
-    for (let i = 1; i <= anggota; i++) {
+    for (let i = 1; i <= total - 1; i++) {
         container.innerHTML += `
-        <div class="card mb-3">
+        <div class="card mb-2">
             <div class="card-body">
-                <h6>Anggota ${i}</h6>
-
-                <input type="text" name="anggota_nama[]" class="form-control mb-2" placeholder="Nama Lengkap" required>
-                <input type="text" name="anggota_ktp[]" class="form-control mb-2" placeholder="No KTP" required>
-
+                <b>Anggota ${i}</b>
+                <input name="anggota_nama[]" class="form-control mb-1" placeholder="Nama" required>
+                <input name="anggota_ktp[]" class="form-control mb-1" placeholder="No KTP" required>
                 <select name="anggota_jk[]" class="form-select" required>
                     <option value="L">Laki-laki</option>
                     <option value="P">Perempuan</option>
